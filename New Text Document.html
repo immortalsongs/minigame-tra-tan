@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Minigame Tra Tấn - Prototype v2</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: linear-gradient(#1a0033, #330022);
+        color: white;
+        font-family: 'Arial', sans-serif;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    h1 { margin: 15px 0 5px; color: #ff66aa; }
+    .subtitle { margin-bottom: 15px; color: #ff99cc; }
+
+    .game-container {
+        width: 820px;
+        background: rgba(0,0,0,0.75);
+        border: 3px solid #ff66aa;
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 0 40px rgba(255, 102, 170, 0.6);
+    }
+    .bars {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        gap: 20px;
+    }
+    .bar-container { flex: 1; }
+    .bar-label { margin-bottom: 6px; font-weight: bold; }
+    .bar {
+        height: 32px;
+        background: #222;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 2px solid #555;
+    }
+    .mana-bar {
+        background: linear-gradient(90deg, #00ddff, #0099ff);
+        height: 100%;
+        width: 100%;
+        transition: width 0.4s;
+    }
+    .pleasure-bar {
+        background: linear-gradient(90deg, #ff2266, #ff88aa);
+        height: 100%;
+        width: 0%;
+        transition: width 0.4s;
+    }
+
+    .boss-area {
+        height: 300px;
+        background: #0a000f;
+        border-radius: 12px;
+        position: relative;
+        margin-bottom: 20px;
+        overflow: hidden;
+        border: 3px solid #ff99cc;
+    }
+    #boss {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 160px;
+        transition: all 0.2s;
+    }
+
+    .methods {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin: 15px 0;
+    }
+    .method-btn {
+        padding: 12px 24px;
+        background: #330033;
+        border: 2px solid #ff66aa;
+        color: white;
+        border-radius: 50px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .method-btn.active {
+        background: #ff66aa;
+        color: black;
+        transform: scale(1.08);
+    }
+
+    .instruction {
+        text-align: center;
+        font-size: 18px;
+        margin: 10px 0 15px;
+        color: #ffccdd;
+    }
+    .status {
+        text-align: center;
+        font-size: 24px;
+        min-height: 40px;
+        margin: 10px 0;
+    }
+    button#restart {
+        padding: 12px 40px;
+        font-size: 18px;
+        background: #ff3366;
+        color: white;
+        border: none;
+        border-radius: 50px;
+        cursor: pointer;
+    }
+</style>
+</head>
+<body>
+
+<h1>🔥 MINIGAME TRA TẤN 🔥</h1>
+<div class="subtitle">Old Man: "Hãy giúp ta khiến Quỷ Vương vâng lời..."</div>
+
+<div class="game-container">
+    <div class="bars">
+        <div class="bar-container">
+            <div class="bar-label">🌀 Ma Thuật: <span id="mana-text">100</span></div>
+            <div class="bar"><div id="mana-bar" class="mana-bar"></div></div>
+        </div>
+        <div class="bar-container">
+            <div class="bar-label">💖 Pleasure Meter: <span id="pleasure-text">0</span></div>
+            <div class="bar"><div id="pleasure-bar" class="pleasure-bar"></div></div>
+        </div>
+    </div>
+
+    <div class="boss-area" id="boss-area">
+        <div id="boss">😈</div>
+    </div>
+
+    <div class="instruction" id="instruction">
+        Chọn phương thức → <strong>Lắc chuột trái ↔ phải</strong> để tra tấn!
+    </div>
+
+    <div class="methods">
+        <button class="method-btn active" data-method="hand">✋ Dùng Tay</button>
+        <button class="method-btn" data-method="tongue">👅 Dùng Lưỡi</button>
+        <button class="method-btn" data-method="whip">🔗 Dùng Roi</button>
+        <button class="method-btn" data-method="toy">🖤 Sextoy</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <center><button id="restart">Chơi Lại</button></center>
+</div>
+
+<script>
+// Game variables
+let mana = 100;
+let pleasure = 0;
+let currentMethod = "hand";
+let isGameOver = false;
+let lastActionTime = Date.now();
+
+const manaBar = document.getElementById('mana-bar');
+const pleasureBar = document.getElementById('pleasure-bar');
+const manaText = document.getElementById('mana-text');
+const pleasureText = document.getElementById('pleasure-text');
+const statusEl = document.getElementById('status');
+const bossEl = document.getElementById('boss');
+const instruction = document.getElementById('instruction');
+
+let lastMouseX = 0;
+let shakeState = 0; // 0 = start, 1 = went right, 2 = went left (full cycle)
+
+// Method selection
+document.querySelectorAll('.method-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (isGameOver) return;
+        document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentMethod = btn.dataset.method;
+    });
+});
+
+// Mouse shake detection (Left -> Right -> Left)
+document.addEventListener('mousemove', (e) => {
+    if (isGameOver) return;
+
+    const deltaX = e.clientX - lastMouseX;
+
+    if (Math.abs(deltaX) > 35) {
+        if (deltaX > 0 && shakeState === 0) {
+            shakeState = 1; // Went right
+        } 
+        else if (deltaX < 0 && shakeState === 1) {
+            shakeState = 2; // Went left → Complete cycle
+        }
+        
+        if (shakeState === 2) {
+            performTorture();
+            shakeState = 0;
+        }
+    }
+
+    lastMouseX = e.clientX;
+});
+
+function performTorture() {
+    if (mana < 2 || isGameOver) return;
+
+    mana -= 5;
+    pleasure = Math.min(100, pleasure + 3);
+    lastActionTime = Date.now();
+
+    updateBars();
+
+    // Visual feedback
+    bossEl.style.transform = 'translateX(-50%) scale(1.18)';
+    setTimeout(() => {
+        bossEl.style.transform = 'translateX(-50%) scale(1)';
+    }, 180);
+
+    // Boss reaction
+    if (pleasure > 70) bossEl.textContent = '🥵';
+    if (pleasure > 90) bossEl.textContent = '😩💦';
+
+    checkWinLose();
+}
+
+function updateBars() {
+    manaBar.style.width = mana + '%';
+    pleasureBar.style.width = pleasure + '%';
+    manaText.textContent = Math.floor(mana);
+    pleasureText.textContent = Math.floor(pleasure);
+}
+
+// Game loop - Regen & Decay
+setInterval(() => {
+    if (isGameOver) return;
+
+    const timeSinceLastAction = Date.now() - lastActionTime;
+
+    // Only regen/decay when not actively torturing (more than 1.2s idle)
+    if (timeSinceLastAction > 1200) {
+        // Mana regen
+        mana = Math.min(100, mana + 10);
+        
+        // Pleasure decay
+        pleasure = Math.max(0, pleasure - 2);
+    }
+
+    updateBars();
+    checkWinLose();
+}, 1000);
+
+function checkWinLose() {
+    if (pleasure >= 100) {
+        isGameOver = true;
+        statusEl.innerHTML = `<span style="color:#00ff88">🎉 THÀNH CÔNG! Nhận được Boss Essence!</span>`;
+        instruction.textContent = "Bạn đã khiến Boss vâng lời!";
+    }
+    if (mana <= 0) {
+        isGameOver = true;
+        statusEl.innerHTML = `<span style="color:#ff3366">💥 Thất bại! Ma thuật cạn kiệt...</span>`;
+        instruction.textContent = "Bạn bị biến trở lại thành bàn tay.";
+    }
+}
+
+// Restart
+document.getElementById('restart').addEventListener('click', () => location.reload());
+
+// Initialize
+updateBars();
+statusEl.textContent = "Old Man đã biến bạn thành người. Bắt đầu thu thập Essence!";
+</script>
+
+</body>
+</html>
